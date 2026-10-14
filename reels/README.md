@@ -34,12 +34,12 @@ Reel length is `photos × per-photo − (photos − 1) × fade`. For example, 8 
 
 ## Music
 
-`make_music.py` synthesizes an original retro pop backing track (120 BPM, I–V–vi–IV, vinyl crackle) that is free to use. At 120 BPM, `--per-photo 2.5 --fade 0.5` changes photo every 4 beats, on the beat.
+`make_music.py` synthesizes an original baroque-pop backing track that is free to use. It has pop drums and bass, a harpsichord, strings and a violin melody over Pachelbel's Canon progression, with hall reverb, tape saturation and vinyl crackle. At 128 BPM, one bar is 1.875s, so `--per-photo 6.125 --fade 0.5` changes photo every 3 bars, on the bar. 8 photos then run 45.5s, and the beat drops as the second photo comes in.
 
 ```sh
-python3 make_music.py -o output/darbin_pop.wav --seconds 17
-python3 make_reel.py photos/ -o output/darbin_reel.mp4 --per-photo 2.5 --fade 0.5 \
-    --music output/darbin_pop.wav --title "Evenings at Darbin" \
+python3 make_music.py -o output/darbin_baroque_pop.wav --seconds 45.5 --bpm 128
+python3 make_reel.py photos/ -o output/darbin_reel_45s.mp4 --per-photo 6.125 --fade 0.5 \
+    --music output/darbin_baroque_pop.wav --title "Evenings at Darbin" \
     --font /usr/share/fonts/truetype/liberation/LiberationSerif-Italic.ttf
 ```
 
