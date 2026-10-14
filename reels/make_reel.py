@@ -93,6 +93,35 @@ def find_font(explicit):
     return None
 
 
+def frame_filter(fit, border, tag):
+    """Filter chain that turns one photo into a 2x-size 9:16 frame."""
+    W, H = WIDTH * 2, HEIGHT * 2
+    if fit == "crop":
+        # Fill the frame and crop the overflow.
+        return f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},setsar=1"
+    # "blur": the whole photo, framed as a print, over a blurred and darkened copy of itself.
+    b = border * 2
+    return (
+        f"split[bg{tag}][fg{tag}];"
+        f"[bg{tag}]scale={W // 8}:{H // 8}:force_original_aspect_ratio=increase,crop={W // 8}:{H // 8},"
+        f"boxblur=12:2,eq=brightness=-0.12:saturation=0.8,scale={W}:{H}[bgb{tag}];"
+        f"[fg{tag}]scale={W - 2 * b - 120}:{H - 2 * b - 120}:force_original_aspect_ratio=decrease,"
+        f"pad=iw+{2 * b}:ih+{2 * b}:{b}:{b}:color=0xF3EBDD[fgp{tag}];"
+        f"[bgb{tag}][fgp{tag}]overlay=(W-w)/2:(H-h)/2,setsar=1"
+    )
+
+
+# Warm, slightly faded film stock: lifted blacks, softened highlights, warm
+# tint, gentle grain and a vignette.
+FILM_LOOK = (
+    "curves=all='0/0.07 0.5/0.52 1/0.95',"
+    "colorbalance=rs=0.06:gs=0.01:bs=-0.06:rm=0.04:bm=-0.04:rh=0.03:bh=-0.07,"
+    "eq=saturation=0.82:contrast=0.97,"
+    "noise=alls=9:allf=t,"
+    "vignette=angle=PI/4.5"
+)
+
+
 def text_filter(textfile, font, start, end, size, y, fade=0.5):
     """drawtext that fades in at `start` and out at `end`."""
     alpha = (
@@ -133,12 +162,10 @@ def build(args):
         parts = []
         for i in range(n):
             z, x, y = (e.replace("N", str(frames - 1)) for e in MOTIONS[i % len(MOTIONS)])
-            # Fill the 9:16 frame (crop the overflow), upscale 2x so zoompan's
-            # integer pixel steps don't jitter, then zoom/pan back down to 1080x1920.
+            parts.append(f"[{i}:v]{frame_filter(args.fit, args.border, i)}[f{i}]")
+            # Upscaled 2x so zoompan's integer pixel steps don't jitter; zoom/pan back down to 1080x1920.
             parts.append(
-                f"[{i}:v]scale={WIDTH * 2}:{HEIGHT * 2}:force_original_aspect_ratio=increase,"
-                f"crop={WIDTH * 2}:{HEIGHT * 2},setsar=1,"
-                f"zoompan=z='{z}':x='{x}':y='{y}':d={frames}:s={WIDTH}x{HEIGHT}:fps={fps},"
+                f"[f{i}]zoompan=z='{z}':x='{x}':y='{y}':d={frames}:s={WIDTH}x{HEIGHT}:fps={fps},"
                 f"trim=duration={d},setpts=PTS-STARTPTS,format=yuv420p[v{i}]"
             )
 
@@ -161,6 +188,8 @@ def build(args):
             ef.write_text(args.end_text)
             start = max(total - d, 0.3)
             overlays.append(text_filter(ef, font, start, total + 1, 72, "h*0.78"))
+        if args.look == "film":
+            overlays.insert(0, FILM_LOOK)
         overlays.append(f"fade=t=in:st=0:d=0.4,fade=t=out:st={max(total - 0.6, 0):.3f}:d=0.6")
         parts.append(f"[{last}]{','.join(overlays)}[vout]")
 
@@ -168,7 +197,8 @@ def build(args):
             a = n
             parts.append(
                 f"[{a}:a]atrim=duration={total:.3f},asetpts=PTS-STARTPTS,"
-                f"afade=t=in:st=0:d=1,afade=t=out:st={max(total - 2, 0):.3f}:d=2[aout]"
+                f"afade=t=in:st=0:d=1,afade=t=out:st={max(total - 2, 0):.3f}:d=2,"
+                f"loudnorm=I=-14:TP=-1.5:LRA=11[aout]"
             )
 
         script = tmp / "filter.txt"
@@ -178,6 +208,7 @@ def build(args):
             cmd += ["-map", "[aout]", "-c:a", "aac", "-b:a", "192k", "-ar", "48000"]
         cmd += [
             "-c:v", "libx264", "-preset", "slow", "-crf", "18", "-profile:v", "high",
+            "-maxrate", "10M", "-bufsize", "20M",
             "-pix_fmt", "yuv420p", "-r", str(fps), "-t", f"{total:.3f}",
             "-movflags", "+faststart", args.output,
         ]
@@ -197,6 +228,10 @@ def main():
     ap.add_argument("--title", help="text shown over the first photo")
     ap.add_argument("--end-text", help="text shown over the last photo, e.g. @darbinwine")
     ap.add_argument("--music", help="audio file; looped or trimmed to the reel length")
+    ap.add_argument("--fit", choices=["blur", "crop"], default="blur",
+                    help="blur: whole photo over a blurred backdrop (best for landscape photos); crop: fill the frame")
+    ap.add_argument("--border", type=int, default=14, help="print border in px for --fit blur (0 for none)")
+    ap.add_argument("--look", choices=["film", "none"], default="film", help="colour grade (default: warm film look)")
     ap.add_argument("--font", help="path to a .ttf/.otf font for the text")
     build(ap.parse_args())
 
