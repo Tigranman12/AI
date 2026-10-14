@@ -198,7 +198,7 @@ def build(args):
             parts.append(
                 f"[{a}:a]atrim=duration={total:.3f},asetpts=PTS-STARTPTS,"
                 f"afade=t=in:st=0:d=1,afade=t=out:st={max(total - 2, 0):.3f}:d=2,"
-                f"loudnorm=I=-14:TP=-1.5:LRA=11[aout]"
+                f"loudnorm=I=-14:TP=-1.5:LRA=11,alimiter=limit=0.7:level=0[aout]"
             )
 
         script = tmp / "filter.txt"
@@ -208,7 +208,7 @@ def build(args):
             cmd += ["-map", "[aout]", "-c:a", "aac", "-b:a", "192k", "-ar", "48000"]
         cmd += [
             "-c:v", "libx264", "-preset", "slow", "-crf", "18", "-profile:v", "high",
-            "-maxrate", "10M", "-bufsize", "20M",
+            "-maxrate", "5M", "-bufsize", "10M",
             "-pix_fmt", "yuv420p", "-r", str(fps), "-t", f"{total:.3f}",
             "-movflags", "+faststart", args.output,
         ]
