@@ -2,3 +2,4 @@ photos/*
 !photos/.gitkeep
 output/*
 !output/.gitkeep
+__pycache__/
